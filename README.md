@@ -2,107 +2,90 @@
 
 ## 1. Project Overview
 
-This project aims to build a scalable, event-driven data ingestion pipeline using AWS services and Python. The system is designed to capture e-commerce order events, store them, process them asynchronously, and make them available for downstream analytics.
+This project implements an event-driven e-commerce order ingestion pipeline using AWS services and Python. It captures order events, stores them in Amazon DynamoDB, processes database changes with AWS Lambda, and distributes notifications through Amazon SNS and Amazon SQS.
 
-The main goal is to understand how modern data engineering systems handle real-time events, reliable message delivery, and scalable processing using cloud services.
+The project demonstrates cloud-based data ingestion, event-driven processing, asynchronous messaging, and operational monitoring.
 
-**Project Status:** In Progress
+**Project Status:** Core pipeline implemented and tested; reliability enhancements planned.
 
 ## 2. Business Problem
 
 E-commerce applications generate order events continuously. Processing every event synchronously can increase response times and make systems harder to scale.
 
-This project addresses these challenges by designing an event-driven architecture that separates event creation, storage, processing, and notification.
+This project uses event-driven architecture to decouple order storage, event processing, notifications, and queue-based consumption. This allows services to process events independently and supports asynchronous workflows.
 
 ## 3. Project Objectives
 
-- Generate and validate e-commerce order events using Python.
-- Store order data in Amazon DynamoDB.
+- Store e-commerce order records in Amazon DynamoDB.
 - Capture table changes using DynamoDB Streams.
 - Process events automatically using AWS Lambda.
-- Use Amazon SNS to distribute event notifications.
-- Use Amazon SQS to buffer messages for asynchronous processing.
-- Implement retries, duplicate-event handling, and dead-letter queues.
-- Monitor processing activity and errors using Amazon CloudWatch.
-- Maintain code, tests, and documentation in GitHub.
+- Publish order notifications through Amazon SNS.
+- Buffer notifications in Amazon SQS.
+- Monitor processing activity using Amazon CloudWatch.
+- Handle different message formats, including JSON and plain-text SNS notifications.
+- Track code and documentation using Git and GitHub.
+- Extend reliability with idempotency, retries, and a dead-letter queue.
 
 ## 4. Technologies Used
 
 | Technology | Purpose |
 |---|---|
-| Python | Generate and validate order events |
-| Amazon DynamoDB | Store order records |
-| DynamoDB Streams | Capture database changes |
-| AWS Lambda | Process events automatically |
-| Amazon SNS | Publish notifications |
-| Amazon SQS | Queue events for asynchronous processing |
-| Amazon CloudWatch | Monitor logs and errors |
-| Git | Track source-code changes |
-| GitHub | Store and document the project |
+| Python | Lambda event processing and message parsing |
+| Amazon DynamoDB | Stores order records |
+| DynamoDB Streams | Captures database changes |
+| AWS Lambda | Processes stream and queue events |
+| Amazon SNS | Publishes order notifications |
+| Amazon SQS | Buffers messages for asynchronous processing |
+| Amazon CloudWatch | Stores execution logs and errors |
+| AWS IAM | Controls service permissions |
+| Git and GitHub | Version control and project documentation |
 
 ## 5. Architecture and Workflow
 
-The planned data flow is:
+The implemented workflow is:
 
-1. **Event Generation:** A Python producer creates an order event containing order ID, customer ID, product ID, quantity, amount, and status.
-2. **Data Storage:** The producer writes the order to an Amazon DynamoDB table.
-3. **Change Capture:** DynamoDB Streams captures new or updated order records.
-4. **Event Processing:** AWS Lambda reads stream records and validates the event.
-5. **Event Publishing:** Lambda publishes valid order events to an Amazon SNS topic.
-6. **Message Queuing:** SNS delivers messages to an Amazon SQS queue.
-7. **Downstream Processing:** A queue consumer processes the messages for further business logic or analytics.
-8. **Monitoring and Recovery:** CloudWatch captures logs and errors, while retries and a dead-letter queue help handle failures.
+1. **Order storage:** New order records are inserted into the DynamoDB `Orders` table.
+2. **Change capture:** DynamoDB Streams captures table changes.
+3. **Stream processing:** The `process-order-events-python` Lambda function processes new `INSERT` records.
+4. **Notification publishing:** Lambda publishes order details to the `order-notifications` SNS topic.
+5. **Notification delivery:** SNS distributes notifications to a confirmed email subscription and the configured SQS queue.
+6. **Queue processing:** Lambda consumes SQS messages and logs the order or notification details.
+7. **Monitoring:** CloudWatch Logs records successful processing and runtime errors.
 
-### Architecture Diagram
+### Architecture diagram
 
-```text
-Python Order Producer
-         |
-         v
-   Amazon DynamoDB
-         |
-         v
-  DynamoDB Streams
-         |
-         v
-    AWS Lambda
-         |
-         v
-     Amazon SNS
-         |
-         v
-     Amazon SQS
-         |
-         v
-  Queue Consumer
-         |
-         v
- Downstream Analytics
-
-CloudWatch: Logs and Monitoring
-Dead-Letter Queue: Failed Messages
+```mermaid
+flowchart TD
+    A[Orders in DynamoDB] --> B[DynamoDB Streams]
+    B --> C[Lambda: Order Event Processor]
+    C -->|Publish notification| D[SNS Topic]
+    D --> E[Email Subscription]
+    D --> F[SQS Queue]
+    F --> G[Lambda: Queue Consumer]
+    C --> H[CloudWatch Logs]
+    G --> H
 ```
+
+**Important implementation detail:** The same Lambda function handles both DynamoDB stream records and SQS records. For DynamoDB `INSERT` events, it publishes an SNS notification. For SQS events, it processes and logs the message without publishing it back to SNS, avoiding a notification loop.
 
 ## 6. Sample Order Event
 
-Example JSON event:
-
 ```json
 {
-  "event_id": "evt-1001",
+  "event_id": "evt-1004",
   "event_type": "ORDER_CREATED",
-  "order_id": "ORD-1001",
-  "customer_id": "CUST-101",
-  "product_id": "PROD-501",
+  "order_id": "ORD-1004",
+  "customer_id": "CUST-104",
+  "product_id": "PROD-504",
   "quantity": 2,
-  "amount": 1499.00,
+  "amount": 1200,
   "status": "CREATED"
 }
 ```
 
-The event ID identifies the event, while the order ID identifies the business order. This distinction is useful when implementing duplicate-event handling.
+The `event_id` identifies the event, while `order_id` identifies the business order. These identifiers can support duplicate-event detection in a future idempotency implementation.
 
-## 7. Current Project Structure
+## 7. Project Structure
 
 ```text
 aws-event-driven-ingestion/
@@ -116,50 +99,52 @@ aws-event-driven-ingestion/
 └── docs/
 ```
 
-- `src/producer.py` — Initial Python producer program.
-- `events/sample_order.json` — Sample e-commerce order event.
-- `tests/` — Planned automated tests.
-- `docs/` — Planned architecture and implementation documentation.
+- `src/producer.py` — Initial local Python producer.
+- `events/sample_order.json` — Sample order event.
+- `tests/` — Directory for automated tests.
+- `docs/` — Directory for architecture and implementation documentation.
 - `.gitignore` — Excludes local and unnecessary files.
 - `README.md` — Project overview and implementation guide.
 
-## 8. Implementation Progress
+The structure above reflects the intended local repository layout; ensure the files and directories exist in GitHub before treating every entry as implemented.
+
+## 8. Implementation and Validation
 
 ### Completed
 
-- Created the project folder and directory structure.
-- Created the initial Python producer file.
-- Verified that Python code runs using the Python launcher.
-- Created a sample order event in JSON.
-- Added a `.gitignore` file.
-- Initialized Git and committed the initial project files.
-- Created a public GitHub repository and pushed the `main` branch.
+- Created the initial local project structure and sample order event.
+- Initialized Git and pushed the project to GitHub.
+- Created the DynamoDB `Orders` table and enabled DynamoDB Streams.
+- Configured the Lambda function `process-order-events-python`.
+- Configured the SNS topic `order-notifications` and confirmed its email subscription.
+- Created the SQS queue `order-processing-queue` and configured SNS delivery to it.
+- Enabled DynamoDB Streams and SQS event source mappings for Lambda.
+- Configured the Lambda SNS topic ARN using an environment variable.
+- Fixed a Lambda handler configuration issue and JSON parsing errors.
+- Verified that DynamoDB order `ORD-1004` triggered Lambda and resulted in an SNS publish.
+- Verified that an SQS message was processed successfully, with order details recorded in CloudWatch Logs.
 
-### In Progress / Planned
+### Planned reliability improvements
 
-- Implement Python event generation and validation.
-- Configure AWS account access and cost controls.
-- Create the DynamoDB table.
-- Enable DynamoDB Streams.
-- Implement the Lambda stream processor.
-- Configure SNS and SQS integration.
-- Add retries, idempotency, and a dead-letter queue.
-- Configure CloudWatch monitoring.
-- Add automated tests and end-to-end validation.
+- Add a dead-letter queue for messages that repeatedly fail processing.
+- Implement idempotency to handle duplicate event deliveries safely.
+- Add input validation and automated tests.
+- Configure CloudWatch alarms and operational dashboards.
+- Document deployment and cleanup procedures.
 
-## 9. Reliability and Security
+## 9. Reliability, Security, and Cost Awareness
 
-The project will incorporate the following practices:
+- Use IAM roles and permissions appropriate to each service.
+- Keep credentials and secrets out of source control.
+- Validate required order fields and message formats.
+- Account for duplicate delivery and retry behavior.
+- Monitor Lambda failures and SQS queue backlogs.
+- Configure suitable log retention to control storage costs.
+- Review AWS resources and costs regularly.
 
-- Validate incoming event fields before processing.
-- Handle duplicate event deliveries safely through idempotent processing.
-- Configure retries and a dead-letter queue for repeated failures.
-- Apply least-privilege IAM permissions to AWS resources.
-- Never commit AWS credentials, access keys, or secrets to GitHub.
-- Monitor failures and queue backlogs using CloudWatch.
-- Review AWS costs and remove resources when they are no longer needed.
+**Current limitation:** A dedicated dead-letter queue, full idempotency controls, and comprehensive alarms have not yet been verified as implemented.
 
-## 10. How to Run the Current Local Demo
+## 10. Running the Local Demo
 
 Prerequisite: Python must be installed and available through the Windows Python launcher.
 
@@ -169,17 +154,17 @@ From the project root, run:
 py src/producer.py
 ```
 
-The current program prints a project confirmation message. It is an initial local demo and does not yet connect to AWS.
+The initial local program is a standalone demo. It does not itself write to DynamoDB unless you extend it with AWS SDK integration.
 
 ## 11. Future Enhancements
 
-- Add configurable order-event generation.
-- Integrate the producer with DynamoDB using Boto3.
-- Deploy the event-processing architecture.
-- Add unit and integration tests.
-- Measure processing latency and failure rates.
-- Extend downstream processing to an analytics destination.
-- Document deployment and cleanup procedures.
+- Integrate the Python producer with DynamoDB using Boto3.
+- Add schema validation and automated unit and integration tests.
+- Configure a dead-letter queue and retry strategy.
+- Implement idempotent processing.
+- Add CloudWatch alarms and performance metrics.
+- Deliver processed order data to an analytics destination such as Amazon S3.
+- Automate deployment using AWS SAM or AWS CloudFormation.
 
 ## 12. Repository
 
@@ -187,12 +172,12 @@ GitHub: https://github.com/Erantikarthik/aws-event-driven-ingestion
 
 ## 13. Learning Outcomes
 
-This project is intended to demonstrate practical understanding of:
+This project demonstrates practical work with:
 
-- Event-driven architecture.
-- Cloud-based data ingestion.
-- Change data capture and stream processing.
-- Asynchronous messaging and decoupled services.
-- Fault tolerance and idempotent processing.
-- AWS monitoring, security, and cost awareness.
-- Git-based version control and project documentation.
+- Event-driven architecture and serverless processing.
+- DynamoDB change data capture using Streams.
+- Asynchronous messaging with SNS and SQS.
+- Python event handling and JSON parsing.
+- CloudWatch logging and error investigation.
+- IAM permissions and cloud cost awareness.
+- Git-based version control and technical documentation.
